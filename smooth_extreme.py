@@ -22,33 +22,33 @@ irac_fits = "IRAC_on_13COgrid.fits"
 
 # Optional: overlay outline onto another WCS map (moment-0, etc.)
 # Set to None if you only want the IRAC reference plot.
-overlay_fits = "IRAC_on_13COgrid.fits"   # e.g. "mom0_13co.fits" or "co13_m0_cut.fits"
-overlay_cmap = "viridis"
-overlay_title = r"$^{13}$CO moment-0 with IRAC outline"
+overlay_fits = "mom0_13co.fits"   # e.g. "mom0_13co.fits" or "co13_m0_cut.fits"
+overlay_cmap = "seismic"
+overlay_title = r"$^{13}$CO" # moment-0"  with IRAC outline"
 
 # Outputs
 out_ref_fits = "irac_ref_smooth.fits"
 out_irac_png = "irac_ref_smooth.png"
-out_overlay_png = "overlay_with_irac_outline.png"
+out_overlay_png = "13co_overlay_with_irac_outline.png"
 out_outline_npy = "m33_outline_radec.npy"
 
 # Smoothing / contour parameters
-smooth_pix = 10             # try 10–20
+smooth_pix = 12             # try 10–20
 do_star_clip = True
 clip_sigma = 3.0
 
-smooth_bg_pix = 45  # big smoothing scale = background
+smooth_bg_pix = 40  # big smoothing scale = background
 
 
 contour_percentile = 50      # try ~25–45 depending on how much envelope you want
-closing_radius = 3             # disk radius for binary_closing; try 4, 6, 8
+closing_radius = 2            # disk radius for binary_closing; try 4, 6, 8
 
 plot_outline_color_irac = "red"
 plot_outline_color_overlay = "white"
 outline_lw = 2.0
 
 # Display stretch (for plotting only)
-vmin_pct, vmax_pct = 5, 99.5
+#vmin_pct, vmax_pct = 5, 99.5
 
 
 # ============================================================
@@ -163,26 +163,30 @@ print(f"Contours found: {len(conts_world)} | p{contour_percentile} -> level={lev
 #    closing_radius=closing_radius
 #)
 
-if ra is None:
-    print("No contour found. Try adjusting contour_percentile and/or smooth_pix and/or closing_radius.")
-else:
-    print(f"Outline found: percentile={contour_percentile} -> level={level:.4g} | N={len(ra)} vertices")
-    np.save(out_outline_npy, np.column_stack([ra, dec]))
-    print("Saved outline (RA,Dec) to:", out_outline_npy)
-
 def plot_wcs_image_with_outlines(data, header, conts_world, title, cmap,
-                                vmin_pct=5, vmax_pct=99.5,
                                 outline_color="red", outline_lw=2.0,
-                                max_paths=None, out_png=None):
+                                max_paths=None, out_png=None,
+                                show_colorbar=False,
+                                cbar_label=""):
+
     w = WCS(header)
-    finite = np.isfinite(data)
-    vmin = np.nanpercentile(data[finite], vmin_pct) if np.any(finite) else None
-    vmax = np.nanpercentile(data[finite], vmax_pct) if np.any(finite) else None
 
     fig = plt.figure(figsize=(7, 6))
     ax = plt.subplot(projection=w)
-    ax.imshow(data, origin="lower", cmap=cmap, vmin=vmin, vmax=vmax)
+
+    # --- NO percentile stretching ---
+    im = ax.imshow(data, origin="lower", cmap=cmap)
+
     ax.set_title(title)
+    ax.set_xlabel("RA")
+    ax.set_ylabel("Dec")
+
+    ax.coords[0].set_major_formatter('hh:mm:ss')
+    ax.coords[1].set_major_formatter('dd:mm')
+
+    if show_colorbar:
+        cbar = plt.colorbar(im, ax=ax, pad=0.02)
+        cbar.set_label(cbar_label)
 
     if conts_world:
         if max_paths is not None:
@@ -191,31 +195,37 @@ def plot_wcs_image_with_outlines(data, header, conts_world, title, cmap,
             conts_to_plot = conts_world
 
         for xy in conts_to_plot:
-            ax.plot(xy[:, 0], xy[:, 1],
+            ax.plot(xy[:,0], xy[:,1],
                     transform=ax.get_transform("world"),
                     color=outline_color, lw=outline_lw)
 
     plt.tight_layout()
-    
+
     if out_png is not None:
         plt.savefig(out_png, dpi=200)
         print("Wrote:", out_png)
-    plt.show()
 
+    plt.show()
 
 # Optional: overlay on another WCS image
 if overlay_fits is not None:
     h_map = fits.getheader(overlay_fits)
     m = fits.getdata(overlay_fits).astype(float)
 
+
+
+
 plot_wcs_image_with_outlines(
-    data=irac,
-    header=h_irac,
+    data=m,
+    header=h_map,
     conts_world=conts_world,
-    title=f"IRAC reference (smoothed: {smooth_pix} pix), outline p{contour_percentile}",
-    cmap="viridis",
-    vmin_pct=vmin_pct, vmax_pct=vmax_pct,
-    outline_color=plot_outline_color_irac,
+    title=overlay_title,
+    cmap=overlay_cmap,
+    outline_color=plot_outline_color_overlay,
     outline_lw=outline_lw,
-    max_paths=None,          # plot all islands
-    out_png=out_irac_png)   
+    max_paths=None,
+    out_png=out_overlay_png,
+    show_colorbar=True,
+    cbar_label="K Km / s"
+
+)
